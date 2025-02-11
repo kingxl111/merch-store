@@ -74,7 +74,6 @@ func (r *repository) GetUserByUsername(ctx context.Context, username string) (*m
 	return &user, nil
 }
 
-// UpdateBalance обновляет баланс пользователя
 func (r *repository) UpdateBalance(ctx context.Context, username string, newBalance int) error {
 	builder := sq.Update(usersTable).
 		PlaceholderFormat(sq.Dollar).
@@ -94,7 +93,6 @@ func (r *repository) UpdateBalance(ctx context.Context, username string, newBala
 	return nil
 }
 
-// CreateTransaction создает запись о переводе монет
 func (r *repository) CreateTransaction(ctx context.Context, senderID, receiverID, amount int) error {
 	builder := sq.Insert(transactionsTable).
 		PlaceholderFormat(sq.Dollar).
@@ -152,7 +150,6 @@ func (r *repository) BuyItem(ctx context.Context, userID int, item string, cost 
 	}
 	defer tx.Rollback(ctx)
 
-	// 1. Получение текущего баланса
 	builder := sq.Select(balanceColumn).
 		PlaceholderFormat(sq.Dollar).
 		From(usersTable).

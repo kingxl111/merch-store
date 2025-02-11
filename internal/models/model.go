@@ -17,3 +17,9 @@ type Transaction struct {
 	Amount     *int    // nil, если это покупка
 	CreatedAt  time.Time
 }
+
+type MerchItem struct {
+	ID    int
+	Name  string
+	Price int
+}
