@@ -6,7 +6,7 @@ import (
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
 	"github.com/go-faster/errors"
-	"github.com/kingxl111/merch-store/internal/models"
+	"github.com/kingxl111/merch-store/internal/shop"
 	"time"
 )
 
@@ -52,7 +52,7 @@ func (r *repository) CreateUser(ctx context.Context, username, password string) 
 	return nil
 }
 
-func (r *repository) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
+func (r *repository) GetUserByUsername(ctx context.Context, username string) (*shop.User, error) {
 	builder := sq.Select(usernameColumn, passwordColumn, balanceColumn).
 		PlaceholderFormat(sq.Dollar).
 		From(usersTable).
@@ -63,7 +63,7 @@ func (r *repository) GetUserByUsername(ctx context.Context, username string) (*m
 		return nil, fmt.Errorf("building select query error: %w", err)
 	}
 
-	var user models.User
+	var user shop.User
 	err = r.db.pool.QueryRow(ctx, query, args...).Scan(&user.Username, &user.Password, &user.Balance)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("user not found: %w", err)
@@ -112,7 +112,7 @@ func (r *repository) CreateTransaction(ctx context.Context, senderID, receiverID
 	return nil
 }
 
-func (r *repository) GetUserTransactions(ctx context.Context, userID int) ([]models.Transaction, error) {
+func (r *repository) GetUserTransactions(ctx context.Context, userID int) ([]shop.Transaction, error) {
 	builder := sq.Select(senderIDColumn, receiverIDColumn, amountColumn, createdAtColumn).
 		PlaceholderFormat(sq.Dollar).
 		From(transactionsTable).
@@ -130,9 +130,9 @@ func (r *repository) GetUserTransactions(ctx context.Context, userID int) ([]mod
 	}
 	defer rows.Close()
 
-	var transactions []models.Transaction
+	var transactions []shop.Transaction
 	for rows.Next() {
-		var t models.Transaction
+		var t shop.Transaction
 		err := rows.Scan(&t.SenderID, &t.ReceiverID, &t.Amount, &t.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scanning transaction error: %w", err)

@@ -1,0 +1,7 @@
+package: merch_store_api
+output: generated.go
+generate:
+  - types
+  - client
+  - server
+  - embedded-spec

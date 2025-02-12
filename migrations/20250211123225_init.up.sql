@@ -11,6 +11,12 @@ CREATE TABLE users (
                        balance INT DEFAULT 0
 );
 
+CREATE TABLE inventories (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users.user_id,
+    item INT
+)
+
 CREATE TABLE transactions (
                               id SERIAL PRIMARY KEY,
                               sender_id INT NOT NULL REFERENCES users(id),

@@ -1,13 +1,6 @@
-package models
+package shop
 
 import "time"
-
-type User struct {
-	ID       int
-	Username string
-	Password string
-	Balance  int
-}
 
 type Transaction struct {
 	ID         int

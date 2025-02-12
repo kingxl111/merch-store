@@ -1,7 +1,7 @@
 # merch-store
 
 ```
-go install -v github.com/ogen-go/ogen/cmd/ogen@latest
+go install -v github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 ```
 
 ```
