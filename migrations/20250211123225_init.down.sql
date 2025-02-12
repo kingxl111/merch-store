@@ -1,3 +1,4 @@
 DROP TABLE users;
-DROP TABLE transactions;
-DROP TABLE merch;
+DROP TABLE inventory;
+DROP TABLE coin_transactions;
+DROP TABLE shop_items;

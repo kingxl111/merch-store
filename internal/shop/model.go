@@ -1,18 +1,11 @@
 package shop
 
-import "time"
-
-type Transaction struct {
-	ID         int
-	SenderID   int
-	ReceiverID *int    // nil, если это покупка
-	Item       *string // nil, если это перевод
-	Amount     *int    // nil, если это покупка
-	CreatedAt  time.Time
+type SendCoinRequest struct {
+	ToUser string
+	Amount int
 }
 
-type MerchItem struct {
-	ID    int
-	Name  string
-	Price int
+type InventoryItem struct {
+	Type     string
+	Quantity int
 }
