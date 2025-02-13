@@ -25,12 +25,12 @@ type httpConfig struct {
 func NewHTTPConfig() (HTTPConfig, error) {
 	host := os.Getenv(httpHostEnvName)
 	if len(host) == 0 {
-		return nil, errors.New("http host not found")
+		return nil, errors.New("http-server host not found")
 	}
 
 	port := os.Getenv(httpPortEnvName)
 	if len(port) == 0 {
-		return nil, errors.New("http port not found")
+		return nil, errors.New("http-server port not found")
 	}
 
 	return &httpConfig{

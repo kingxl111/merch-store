@@ -273,7 +273,7 @@ func NewPostApiAuthRequestWithBody(server string, contentType string, body io.Re
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/http/service")
+	operationPath := fmt.Sprintf("/http-server/service")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -309,7 +309,7 @@ func NewGetApiBuyItemRequest(server string, item string) (*http.Request, error) 
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/http/buy/%s", pathParam0)
+	operationPath := fmt.Sprintf("/http-server/buy/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -336,7 +336,7 @@ func NewGetApiInfoRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/http/info")
+	operationPath := fmt.Sprintf("/http-server/info")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -374,7 +374,7 @@ func NewPostApiSendCoinRequestWithBody(server string, contentType string, body i
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/http/sendCoin")
+	operationPath := fmt.Sprintf("/http-server/sendCoin")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -781,16 +781,16 @@ func ParsePostApiSendCoinResponse(rsp *http.Response) (*PostApiSendCoinResponse,
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// Аутентификация и получение JWT-токена. При первой аутентификации пользователь создается автоматически.
-	// (POST /http/service)
+	// (POST /http-server/service)
 	PostApiAuth(ctx echo.Context) error
 	// Купить предмет за монеты.
-	// (GET /http/buy/{item})
+	// (GET /http-server/buy/{item})
 	GetApiBuyItem(ctx echo.Context, item string) error
 	// Получить информацию о монетах, инвентаре и истории транзакций.
-	// (GET /http/info)
+	// (GET /http-server/info)
 	GetApiInfo(ctx echo.Context) error
 	// Отправить монеты другому пользователю.
-	// (POST /http/sendCoin)
+	// (POST /http-server/sendCoin)
 	PostApiSendCoin(ctx echo.Context) error
 }
 
@@ -878,10 +878,10 @@ func RegisterHandlersWithBaseURL(router EchoRouter, si ServerInterface, baseURL 
 		Handler: si,
 	}
 
-	router.POST(baseURL+"/http/service", wrapper.PostApiAuth)
-	router.GET(baseURL+"/http/buy/:item", wrapper.GetApiBuyItem)
-	router.GET(baseURL+"/http/info", wrapper.GetApiInfo)
-	router.POST(baseURL+"/http/sendCoin", wrapper.PostApiSendCoin)
+	router.POST(baseURL+"/http-server/service", wrapper.PostApiAuth)
+	router.GET(baseURL+"/http-server/buy/:item", wrapper.GetApiBuyItem)
+	router.GET(baseURL+"/http-server/info", wrapper.GetApiInfo)
+	router.POST(baseURL+"/http-server/sendCoin", wrapper.PostApiSendCoin)
 
 }
 

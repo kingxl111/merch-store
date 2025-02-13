@@ -3,19 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kingxl111/merch-store/internal/config"
-	"github.com/kingxl111/merch-store/internal/environment"
-	"github.com/kingxl111/merch-store/internal/gates/http"
-	"github.com/kingxl111/merch-store/internal/repository"
-	"github.com/kingxl111/merch-store/internal/repository/postgres"
-	"github.com/kingxl111/merch-store/internal/shop/service"
-	"github.com/labstack/echo/v4"
-	"golang.org/x/sync/errgroup"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
+
+	"github.com/kingxl111/merch-store/internal/config"
+	"github.com/kingxl111/merch-store/internal/repository/postgres"
+	"github.com/kingxl111/merch-store/internal/shop/service"
+	"github.com/labstack/echo/v4"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -55,12 +52,12 @@ func runMain(ctx context.Context, logger *slog.Logger) error {
 	}
 	defer db.Close()
 
-	infoRepo := postgres.NewInfoRepository(db)
-	infoService := service.NewInfoService(infoRepo)
-	handler := http.NewHandler(infoService)
+	repo := postgres.NewRepository(db)
+	srv := service.NewService(repo)
+	handler := http.NewHandler(srv)
 
 	e := echo.New()
-	e.GET("/http/info", handler.GetApiInfo)
+	e.GET("/http-server/info", handler.GetApiInfo)
 
 	httpServer := environment.NewServer(e, environment.ServerOptions{
 		Logger: logger,

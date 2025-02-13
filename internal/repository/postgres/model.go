@@ -31,7 +31,6 @@ type ShopItem struct {
 	ID    int    `db:"id"`
 	Type  string `db:"type"`
 	Price int    `db:"price"`
-	Stock int    `db:"stock"`
 }
 
 type UserInfo struct {

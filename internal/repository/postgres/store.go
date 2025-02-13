@@ -2,12 +2,8 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
-	"github.com/go-faster/errors"
-	"github.com/kingxl111/merch-store/internal/shop"
-	"time"
 )
 
 const (
@@ -33,11 +29,11 @@ func NewRepository(db *DB) *repository {
 	return &repository{db: db}
 }
 
-func (r *repository) CreateUser(ctx context.Context, username, password string) error {
+func (r *repository) AuthUser(ctx context.Context, user *User) error {
 	builder := sq.Insert(usersTable).
 		PlaceholderFormat(sq.Dollar).
 		Columns(usernameColumn, passwordColumn, balanceColumn).
-		Values(username, password, 0)
+		Values(user.Username, user.Password, user.Coins)
 
 	query, args, err := builder.ToSql()
 	if err != nil {
@@ -52,28 +48,27 @@ func (r *repository) CreateUser(ctx context.Context, username, password string) 
 	return nil
 }
 
-func (r *repository) GetUserByUsername(ctx context.Context, username string) (*shop.User, error) {
-	builder := sq.Select(usernameColumn, passwordColumn, balanceColumn).
-		PlaceholderFormat(sq.Dollar).
-		From(usersTable).
-		Where(sq.Eq{usernameColumn: username})
-
-	query, args, err := builder.ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("building select query error: %w", err)
-	}
-
-	var user shop.User
-	err = r.db.pool.QueryRow(ctx, query, args...).Scan(&user.Username, &user.Password, &user.Balance)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("user not found: %w", err)
-	} else if err != nil {
-		return nil, fmt.Errorf("executing select query error: %w", err)
-	}
-
-	return &user, nil
+func (r *repository) TransferCoins(ctx context.Context, fromUser, toUser string, amount int) error {
+	return nil
 }
 
+func (r *repository) GetBalance(ctx context.Context, userID string) (int, error) {
+	return 0, nil
+}
+
+func (r *repository) GetTransactionHistory(ctx context.Context, userID string) ([]CoinTransaction, error) {
+	return nil, nil
+}
+
+func (r *repository) BuyMerch(ctx context.Context, item *InventoryItem) error {
+	return nil
+}
+
+func (r *repository) GetInventory(ctx context.Context, userID string) ([]InventoryItem, error) {
+	return nil, nil
+}
+
+/*
 func (r *repository) UpdateBalance(ctx context.Context, username string, newBalance int) error {
 	builder := sq.Update(usersTable).
 		PlaceholderFormat(sq.Dollar).
@@ -206,3 +201,4 @@ func (r *repository) BuyItem(ctx context.Context, userID int, item string, cost 
 
 	return nil
 }
+*/

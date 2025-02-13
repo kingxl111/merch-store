@@ -6,14 +6,11 @@ require (
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/getkin/kin-openapi v0.129.0
 	github.com/go-faster/errors v0.7.1
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/oapi-codegen/runtime v1.1.1
-	github.com/pkg/errors v0.9.1
-	github.com/samber/lo v1.49.1
-	github.com/sethvargo/go-envconfig v1.1.0
-	go.uber.org/automaxprocs v1.6.0
 	golang.org/x/sync v0.11.0
 )
 
