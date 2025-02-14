@@ -2,38 +2,51 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"github.com/labstack/echo/v4"
+	"golang.org/x/sync/errgroup"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/kingxl111/merch-store/internal/config"
+	env "github.com/kingxl111/merch-store/internal/environment"
+	httpserver "github.com/kingxl111/merch-store/internal/gates/http-server"
 	"github.com/kingxl111/merch-store/internal/repository/postgres"
-	"github.com/kingxl111/merch-store/internal/shop/service"
-	"github.com/labstack/echo/v4"
-	"golang.org/x/sync/errgroup"
+	shop "github.com/kingxl111/merch-store/internal/shop/service"
+	usrs "github.com/kingxl111/merch-store/internal/users/service"
+	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 )
+
+var configPath string
+
+func init() {
+	flag.StringVar(&configPath, "config-path", ".env", "path to config file")
+}
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	logger := setupLogger()
+	defaultLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	slog.SetDefault(defaultLogger)
 
-	if err := runMain(ctx, logger); err != nil {
-		logger.Error("run main", slog.Any("err", err))
-		os.Exit(1)
+	if err := runMain(ctx); err != nil {
+		defaultLogger.Error("run main", slog.Any("err", err))
+		return
 	}
 }
 
-func setupLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
-}
+func runMain(ctx context.Context) error {
+	flag.Parse()
 
-func runMain(ctx context.Context, logger *slog.Logger) error {
+	err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %v", err)
+	}
+
 	pgConfig, err := config.NewPGConfig()
 	if err != nil {
 		return fmt.Errorf("pg config: %w", err)
@@ -52,23 +65,41 @@ func runMain(ctx context.Context, logger *slog.Logger) error {
 	}
 	defer db.Close()
 
+	loggerConfig, err := config.NewLoggerConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get logger config: %v", err)
+	}
+
+	handleOpts := &slog.HandlerOptions{
+		Level: loggerConfig.Level(),
+	}
+	var h slog.Handler = slog.NewTextHandler(os.Stdout, handleOpts)
+	logger := slog.New(h)
+
 	repo := postgres.NewRepository(db)
-	srv := service.NewService(repo)
-	handler := http.NewHandler(srv)
+	shopSrv := shop.NewShopService(repo)
+	userSrv := usrs.NewUserService(repo)
 
+	httpServerConfig, err := config.NewHTTPConfig()
+	if err != nil {
+		return fmt.Errorf("http server config error: %w", err)
+	}
+
+	var opts env.ServerOptions
+	opts.WithLogger(logger)
+
+	handler := httpserver.NewHandler(userSrv, shopSrv)
 	e := echo.New()
-	e.GET("/http-server/info", handler.GetApiInfo)
+	merchstoreapi.RegisterHandlersWithBaseURL(e, handler, httpServerConfig.Address())
+	httpServer := opts.NewServer(e)
 
-	httpServer := environment.NewServer(e, environment.ServerOptions{
-		Logger: logger,
-	})
-
-	// Запуск сервера
 	eg, ctx := errgroup.WithContext(ctx)
-
-	eg.Go(func() error {
-		return httpServer.ListenAndServeContext(ctx, ":8080")
-	})
+	eg.Go(
+		func() error {
+			logger.Info("starting http server on " + httpServerConfig.Address() + "...")
+			return env.ListenAndServeContext(ctx, httpServer)
+		},
+	)
 
 	eg.Go(func() error {
 		<-ctx.Done()

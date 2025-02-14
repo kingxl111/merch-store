@@ -2,8 +2,9 @@ package http
 
 import (
 	"context"
+	"fmt"
+	"github.com/go-faster/errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"runtime/debug"
 )
@@ -67,21 +68,19 @@ func (o *ServerOptions) NewServer(handler http.Handler) *http.Server {
 	return srv
 }
 
-func ListenAndServeContext(ctx context.Context, addr string, srv *http.Server) error {
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
+func ListenAndServeContext(ctx context.Context, srv *http.Server) error {
 	go func() {
-		if err := srv.Serve(lis); err != nil && err != http.ErrServerClosed {
+		fmt.Println("SERVER ADDRESS: " + srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
 			slog.Error("HTTP server error", "error", err)
 		}
 	}()
 
 	go func() {
 		<-ctx.Done()
-		srv.Shutdown(context.Background())
+		if err := srv.Shutdown(context.Background()); err != nil {
+			slog.Error("HTTP server shutdown error", "error", err)
+		}
 	}()
 
 	return nil

@@ -26,16 +26,17 @@ func generatePasswordHash(password string) string {
 }
 
 func GenerateToken(username, password string) (string, error) {
-	userID, err := stg.GetUser(username, generatePasswordHash(password))
-	if err != nil {
-		return "", err
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &tokenClaims{
-		UserID: userID,
-	})
-
-	return token.SignedString([]byte(signingKey))
+	//userID, err := stg.GetUser(username, generatePasswordHash(password))
+	//if err != nil {
+	//	return "", err
+	//}
+	//
+	//token := jwt.NewWithClaims(jwt.SigningMethodHS256, &tokenClaims{
+	//	UserID: userID,
+	//})
+	//
+	//return token.SignedString([]byte(signingKey))
+	return "", nil
 }
 
 func ParseToken(accessToken string) (int, error) {

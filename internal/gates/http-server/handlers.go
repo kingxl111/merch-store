@@ -1,25 +1,50 @@
 package http_server
 
 import (
+	"fmt"
+	"github.com/kingxl111/merch-store/internal/users"
 	"net/http"
 
-	merch_store_api "github.com/kingxl111/merch-store/pkg/api/merch-store"
+	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 	"github.com/labstack/echo/v4"
 )
 
-var _ merch_store_api.ServerInterface = (*Handler)(nil)
+var _ merchstoreapi.ServerInterface = (*Handler)(nil)
 
-type Handler struct{}
+type Handler struct {
+	userService UserService
+	shopService ShopService
+}
 
-func (h *Handler) PostApiAuth(ctx echo.Context) error {
-	var req merch_store_api.AuthRequest
-	if err := ctx.Bind(&req); err != nil {
-		return ctx.JSON(http.StatusBadRequest, merch_store_api.ErrorResponse{Errors: &err.Error()})
+func NewHandler(userService UserService, shopService ShopService) *Handler {
+	return &Handler{
+		userService: userService,
+		shopService: shopService,
+	}
+}
+
+func (h *Handler) PostApiAuth(echoCtx echo.Context) error {
+	var req merchstoreapi.AuthRequest
+	if err := echoCtx.Bind(&req); err != nil {
+		errMsg := err.Error()
+		return echoCtx.JSON(
+			http.StatusBadRequest,
+			merchstoreapi.ErrorResponse{Errors: &errMsg},
+		)
 	}
 
-	// TODO: call jwt token creation
-	token := "generated-jwt-token"
-	return ctx.JSON(http.StatusOK, merch_store_api.AuthResponse{Token: &token})
+	ctx := echoCtx.Request().Context()
+	// dto
+	servReq := users.AuthRequest{
+		Username: req.Username,
+		Password: req.Password,
+	}
+	resp, err := h.userService.Authenticate(ctx, &servReq)
+	if err != nil {
+		return fmt.Errorf("TODO: add wrapped error")
+	}
+
+	return echoCtx.JSON(http.StatusOK, merchstoreapi.AuthResponse{Token: &resp.Token})
 }
 
 func (h *Handler) GetApiBuyItem(ctx echo.Context, item string) error {
@@ -35,7 +60,7 @@ func (h *Handler) GetApiBuyItem(ctx echo.Context, item string) error {
 */
 func (h *Handler) GetApiInfo(ctx echo.Context) error {
 	// TODO: call service layer
-	info := merch_store_api.InfoResponse{
+	info := merchstoreapi.InfoResponse{
 		Coins: new(int),
 	}
 	*info.Coins = 100
@@ -43,9 +68,13 @@ func (h *Handler) GetApiInfo(ctx echo.Context) error {
 }
 
 func (h *Handler) PostApiSendCoin(ctx echo.Context) error {
-	var req merch_store_api.SendCoinRequest
+	var req merchstoreapi.SendCoinRequest
 	if err := ctx.Bind(&req); err != nil {
-		return ctx.JSON(http.StatusBadRequest, merch_store_api.ErrorResponse{Errors: &err.Error()})
+		errMsg := err.Error()
+		return ctx.JSON(
+			http.StatusBadRequest,
+			merchstoreapi.ErrorResponse{Errors: &errMsg},
+		)
 	}
 
 	// TODO: call service layer
