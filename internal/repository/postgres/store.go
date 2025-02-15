@@ -12,14 +12,15 @@ import (
 
 const (
 	usersTable        = "users"
-	transactionsTable = "transactions"
+	transactionsTable = "coin_transactions"
 
+	idColumn       = "id"
 	usernameColumn = "username"
 	passwordColumn = "password"
 	balanceColumn  = "coins"
 
-	senderIDColumn   = "sender_id"
-	receiverIDColumn = "receiver_id"
+	senderIDColumn   = "from_user_id"
+	receiverIDColumn = "to_user_id"
 	amountColumn     = "amount"
 	itemColumn       = "item"
 	createdAtColumn  = "created_at"
@@ -96,6 +97,101 @@ func (r *repository) AuthUser(ctx context.Context, user *User) error {
 }
 
 func (r *repository) TransferCoins(ctx context.Context, fromUser, toUser string, amount int) error {
+	tx, err := r.db.pool.Begin(ctx)
+	if err != nil {
+		return repo.ErrorTxBegin
+	}
+	defer tx.Rollback(ctx)
+
+	var fromUserID, fromBalance int
+	var toUserID int
+
+	selectSender := sq.Select(idColumn, balanceColumn).
+		From(usersTable).
+		Where(sq.Eq{usernameColumn: fromUser}).
+		Suffix("FOR UPDATE").
+		PlaceholderFormat(sq.Dollar)
+	query, args, err := selectSender.ToSql()
+	fmt.Printf("Query: %s, Args: %v\n", query, args)
+	if err != nil {
+		return repo.ErrorBuildSenderSelectQuery
+	}
+
+	err = tx.QueryRow(ctx, query, args...).Scan(&fromUserID, &fromBalance)
+	if err != nil {
+		return repo.ErrorSenderNotFound
+	}
+
+	selectReceiver := sq.Select(idColumn).
+		From(usersTable).
+		Where(sq.Eq{usernameColumn: toUser}).
+		Suffix("FOR UPDATE").
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err = selectReceiver.ToSql()
+	if err != nil {
+		return repo.ErrorBuildReceiverSelectQuery
+	}
+
+	err = tx.QueryRow(ctx, query, args...).Scan(&toUserID)
+	if err != nil {
+		return repo.ErrorReceiverNotFound
+	}
+
+	if fromBalance < amount {
+		return repo.ErrorInsFunds
+	}
+
+	updateSender := sq.Update(usersTable).
+		Set(balanceColumn, sq.Expr(balanceColumn+" - ?", amount)).
+		Where(sq.Eq{idColumn: fromUserID}).
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err = updateSender.ToSql()
+	if err != nil {
+		return repo.ErrorBuildSenderUpdateQuery
+	}
+
+	_, err = tx.Exec(ctx, query, args...)
+	if err != nil {
+		return repo.ErrorUpdateSenderBalance
+	}
+
+	updateReceiver := sq.Update(usersTable).
+		Set(balanceColumn, sq.Expr(balanceColumn+" + ?", amount)).
+		Where(sq.Eq{idColumn: toUserID}).
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err = updateReceiver.ToSql()
+	if err != nil {
+		return repo.ErrorBuildReceiverUpdateQuery
+	}
+
+	_, err = tx.Exec(ctx, query, args...)
+	if err != nil {
+		return repo.ErrorUpdateReceiverBalance
+	}
+
+	insertTransaction := sq.Insert(transactionsTable).
+		Columns(senderIDColumn, receiverIDColumn, amountColumn, createdAtColumn).
+		Values(fromUserID, toUserID, amount, time.Now()).
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err = insertTransaction.ToSql()
+	if err != nil {
+		return repo.ErrorBuildInsertTransactionQuery
+	}
+
+	_, err = tx.Exec(ctx, query, args...)
+	if err != nil {
+		return repo.ErrorInsertTransactionRecord
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return repo.ErrorTxCommit
+	}
+
 	return nil
 }
 

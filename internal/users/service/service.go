@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+
 	"github.com/go-faster/errors"
 	"github.com/kingxl111/merch-store/internal/repository"
 	"github.com/kingxl111/merch-store/internal/repository/postgres"
@@ -48,6 +50,16 @@ func (u *userService) Authenticate(ctx context.Context, req *users.AuthRequest) 
 }
 
 func (u *userService) TransferCoins(ctx context.Context, req *users.CoinTransfer) error {
+
+	err := u.userRepo.TransferCoins(ctx, req.FromUser, req.ToUser, req.Amount)
+	if err != nil {
+		fmt.Println(err)
+		if errors.Is(err, repository.ErrorInsFunds) {
+			return users.ErrorInsufFunds
+		}
+		return users.ErrorService
+	}
+
 	return nil
 }
 

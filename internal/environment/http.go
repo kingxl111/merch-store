@@ -11,6 +11,8 @@ import (
 	"github.com/kingxl111/merch-store/internal/users/service"
 )
 
+const UsernameContextKey = "username"
+
 type ServerOptions struct {
 	logger        *slog.Logger
 	panicHandler  func(w http.ResponseWriter, r *http.Request, p any)
@@ -132,7 +134,8 @@ func (o *ServerOptions) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, "username", username)
+		ctx = context.WithValue(ctx, UsernameContextKey, username)
+		o.logger.Info("user: " + ctx.Value(UsernameContextKey).(string))
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)

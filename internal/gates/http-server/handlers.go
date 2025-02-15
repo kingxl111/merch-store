@@ -1,8 +1,11 @@
 package http_server
 
 import (
-	"github.com/go-faster/errors"
+	"fmt"
 	"net/http"
+
+	"github.com/go-faster/errors"
+	env "github.com/kingxl111/merch-store/internal/environment"
 
 	"github.com/kingxl111/merch-store/internal/users"
 
@@ -78,24 +81,39 @@ func (h *Handler) GetApiInfo(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, info)
 }
 
-func (h *Handler) PostApiSendCoin(ctx echo.Context) error {
+func (h *Handler) PostApiSendCoin(echoCtx echo.Context) error {
 	var req merchstoreapi.SendCoinRequest
-	if err := ctx.Bind(&req); err != nil {
+	if err := echoCtx.Bind(&req); err != nil {
 		errMsg := err.Error()
-		return ctx.JSON(
+		return echoCtx.JSON(
 			http.StatusBadRequest,
 			merchstoreapi.ErrorResponse{Errors: &errMsg},
 		)
 	}
 
-	// TODO: call service layer
-	return ctx.JSON(http.StatusOK, "Монеты отправлены")
-}
+	ctx := echoCtx.Request().Context()
+	fromUser := ctx.Value(env.UsernameContextKey).(string)
+	transfer := users.CoinTransfer{
+		FromUser: fromUser,
+		ToUser:   req.ToUser,
+		Amount:   req.Amount,
+	}
+	err := h.userService.TransferCoins(ctx, &transfer)
+	fmt.Println(err)
+	if err != nil {
+		if errors.Is(err, users.ErrorInsufFunds) {
+			errMsg := "insufficient funds in the sender's balance"
+			return echoCtx.JSON(
+				http.StatusBadRequest,
+				merchstoreapi.ErrorResponse{Errors: &errMsg},
+			)
+		}
+		errMsg := "internal server error"
+		return echoCtx.JSON(
+			http.StatusInternalServerError,
+			merchstoreapi.ErrorResponse{Errors: &errMsg},
+		)
+	}
 
-//
-//func main() {
-//	e := echo.New()
-//	handler := &Handler{}
-//	merch_store_api.RegisterHandlers(e, handler)
-//	e.Logger.Fatal(e.Start(":8080"))
-//}
+	return echoCtx.JSON(http.StatusOK, "Монеты отправлены")
+}

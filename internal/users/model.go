@@ -19,6 +19,7 @@ type UserInfoResponse struct {
 }
 
 type CoinTransfer struct {
-	User   string
-	Amount int
+	FromUser string
+	ToUser   string
+	Amount   int
 }
