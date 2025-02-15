@@ -16,7 +16,9 @@ func NewUserService(usrRepo UserRepository) *userService {
 }
 
 func (u *userService) Authenticate(ctx context.Context, req *users.AuthRequest) (*users.AuthResponse, error) {
-	return nil, nil
+	var resp users.AuthResponse
+	resp.Token = "hello, token!"
+	return &resp, nil
 }
 
 func (u *userService) TransferCoins(ctx context.Context, req *users.CoinTransfer) error {

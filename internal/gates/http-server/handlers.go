@@ -32,7 +32,6 @@ func (h *Handler) PostApiAuth(echoCtx echo.Context) error {
 			merchstoreapi.ErrorResponse{Errors: &errMsg},
 		)
 	}
-
 	ctx := echoCtx.Request().Context()
 	// dto
 	servReq := users.AuthRequest{

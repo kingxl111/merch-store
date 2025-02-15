@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"fmt"
 	"github.com/go-faster/errors"
 	"log/slog"
 	"net/http"
@@ -32,7 +31,7 @@ func (o *ServerOptions) WithMiddlewares(v ...func(http.Handler) http.Handler) {
 	o.middlewares = append(o.middlewares, v...)
 }
 
-func (o *ServerOptions) NewServer(handler http.Handler) *http.Server {
+func (o *ServerOptions) NewServer(handler http.Handler, addr string) *http.Server {
 	if o.logger == nil {
 		o.logger = slog.Default()
 	}
@@ -59,6 +58,7 @@ func (o *ServerOptions) NewServer(handler http.Handler) *http.Server {
 
 	srv := &http.Server{
 		Handler: wrappedHandler,
+		Addr:    addr,
 	}
 
 	for _, opt := range o.serverOptions {
@@ -70,7 +70,6 @@ func (o *ServerOptions) NewServer(handler http.Handler) *http.Server {
 
 func ListenAndServeContext(ctx context.Context, srv *http.Server) error {
 	go func() {
-		fmt.Println("SERVER ADDRESS: " + srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
 			slog.Error("HTTP server error", "error", err)
 		}

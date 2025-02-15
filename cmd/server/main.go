@@ -20,6 +20,8 @@ import (
 	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 )
 
+const baseURL = ""
+
 var configPath string
 
 func init() {
@@ -90,8 +92,8 @@ func runMain(ctx context.Context) error {
 
 	handler := httpserver.NewHandler(userSrv, shopSrv)
 	e := echo.New()
-	merchstoreapi.RegisterHandlersWithBaseURL(e, handler, httpServerConfig.Address())
-	httpServer := opts.NewServer(e)
+	merchstoreapi.RegisterHandlersWithBaseURL(e, handler, baseURL)
+	httpServer := opts.NewServer(e, httpServerConfig.Address())
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(
