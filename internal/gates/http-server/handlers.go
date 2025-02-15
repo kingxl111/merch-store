@@ -2,8 +2,9 @@ package http_server
 
 import (
 	"fmt"
-	"github.com/kingxl111/merch-store/internal/users"
 	"net/http"
+
+	"github.com/kingxl111/merch-store/internal/users"
 
 	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 	"github.com/labstack/echo/v4"

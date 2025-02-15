@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+
 	"github.com/kingxl111/merch-store/internal/shop"
 )
 

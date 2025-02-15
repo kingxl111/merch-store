@@ -4,12 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/labstack/echo/v4"
-	"golang.org/x/sync/errgroup"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/labstack/echo/v4"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/kingxl111/merch-store/internal/config"
 	env "github.com/kingxl111/merch-store/internal/environment"

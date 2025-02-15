@@ -2,10 +2,13 @@ package http
 
 import (
 	"context"
-	"github.com/go-faster/errors"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strings"
+
+	"github.com/go-faster/errors"
+	"github.com/kingxl111/merch-store/internal/users/service"
 )
 
 type ServerOptions struct {
@@ -55,6 +58,7 @@ func (o *ServerOptions) NewServer(handler http.Handler, addr string) *http.Serve
 
 	wrappedHandler = o.loggingMiddleware(wrappedHandler)
 	wrappedHandler = o.recoveryMiddleware(wrappedHandler)
+	wrappedHandler = o.authMiddleware(wrappedHandler)
 
 	srv := &http.Server{
 		Handler: wrappedHandler,
@@ -103,6 +107,34 @@ func (o *ServerOptions) recoveryMiddleware(next http.Handler) http.Handler {
 				o.panicHandler(w, r, p)
 			}
 		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (o *ServerOptions) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.String(), "/api/auth") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "missing token", http.StatusUnauthorized)
+			return
+		}
+
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		username, err := service.ParseToken(token)
+		if err != nil {
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, "username", username)
+		r = r.WithContext(ctx)
+
 		next.ServeHTTP(w, r)
 	})
 }

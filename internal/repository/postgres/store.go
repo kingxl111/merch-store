@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+
 	sq "github.com/Masterminds/squirrel"
 )
 
@@ -30,6 +31,12 @@ func NewRepository(db *DB) *repository {
 }
 
 func (r *repository) AuthUser(ctx context.Context, user *User) error {
+
+	selectBuilder := sq.Select(usernameColumn, passwordColumn).
+		PlaceholderFormat(sq.Dollar).
+		From(usersTable).
+		Where(sq.Eq{usernameColumn: user.Username})
+
 	builder := sq.Insert(usersTable).
 		PlaceholderFormat(sq.Dollar).
 		Columns(usernameColumn, passwordColumn, balanceColumn).
