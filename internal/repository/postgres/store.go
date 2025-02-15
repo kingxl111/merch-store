@@ -3,7 +3,10 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
+
+	"github.com/google/uuid"
 
 	repo "github.com/kingxl111/merch-store/internal/repository"
 
@@ -13,6 +16,8 @@ import (
 const (
 	usersTable        = "users"
 	transactionsTable = "coin_transactions"
+	shopItemsTable    = "shop_items"
+	inventoryTable    = "inventory"
 
 	idColumn       = "id"
 	usernameColumn = "username"
@@ -24,6 +29,13 @@ const (
 	amountColumn     = "amount"
 	itemColumn       = "item"
 	createdAtColumn  = "created_at"
+
+	priceColumn = "price"
+	typeColumn  = "type"
+
+	userIDColumn   = "user_id"
+	itemTypeColumn = "item_type"
+	quantityColumn = "quantity"
 )
 
 type repository struct {
@@ -35,7 +47,6 @@ func NewRepository(db *DB) *repository {
 }
 
 func (r *repository) AuthUser(ctx context.Context, user *User) error {
-
 	selectBuilder := sq.Select(usernameColumn).
 		PlaceholderFormat(sq.Dollar).
 		From(usersTable).
@@ -101,18 +112,26 @@ func (r *repository) TransferCoins(ctx context.Context, fromUser, toUser string,
 	if err != nil {
 		return repo.ErrorTxBegin
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback(ctx)
+			panic(p)
+		} else if err != nil {
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				slog.Error("cannot rollback transaction", slog.Any("error", rollbackErr))
+			}
+		}
+	}()
 
-	var fromUserID, fromBalance int
-	var toUserID int
+	var fromUserID, toUserID uuid.UUID
+	var fromBalance int
 
 	selectSender := sq.Select(idColumn, balanceColumn).
 		From(usersTable).
 		Where(sq.Eq{usernameColumn: fromUser}).
-		Suffix("FOR UPDATE").
+		Suffix("FOR UPDATE SKIP LOCKED").
 		PlaceholderFormat(sq.Dollar)
 	query, args, err := selectSender.ToSql()
-	fmt.Printf("Query: %s, Args: %v\n", query, args)
 	if err != nil {
 		return repo.ErrorBuildSenderSelectQuery
 	}
@@ -125,7 +144,7 @@ func (r *repository) TransferCoins(ctx context.Context, fromUser, toUser string,
 	selectReceiver := sq.Select(idColumn).
 		From(usersTable).
 		Where(sq.Eq{usernameColumn: toUser}).
-		Suffix("FOR UPDATE").
+		Suffix("FOR UPDATE SKIP LOCKED").
 		PlaceholderFormat(sq.Dollar)
 
 	query, args, err = selectReceiver.ToSql()
@@ -195,153 +214,202 @@ func (r *repository) TransferCoins(ctx context.Context, fromUser, toUser string,
 	return nil
 }
 
-func (r *repository) GetBalance(ctx context.Context, userID string) (int, error) {
-	return 0, nil
-}
-
-func (r *repository) GetTransactionHistory(ctx context.Context, userID string) ([]CoinTransaction, error) {
-	return nil, nil
-}
-
-func (r *repository) BuyMerch(ctx context.Context, item *InventoryItem) error {
-	return nil
-}
-
-func (r *repository) GetInventory(ctx context.Context, userID string) ([]InventoryItem, error) {
-	return nil, nil
-}
-
-/*
-func (r *repository) UpdateBalance(ctx context.Context, username string, newBalance int) error {
-	builder := sq.Update(usersTable).
-		PlaceholderFormat(sq.Dollar).
-		Set(balanceColumn, newBalance).
-		Where(sq.Eq{usernameColumn: username})
+func (r *repository) GetBalance(ctx context.Context, username string) (*int, error) {
+	builder := sq.Select(balanceColumn).
+		From(usersTable).
+		Where(sq.Eq{usernameColumn: username}).
+		PlaceholderFormat(sq.Dollar)
 
 	query, args, err := builder.ToSql()
 	if err != nil {
-		return fmt.Errorf("building update query error: %w", err)
-	}
-
-	_, err = r.db.pool.Exec(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("executing update query error: %w", err)
-	}
-
-	return nil
-}
-
-func (r *repository) CreateTransaction(ctx context.Context, senderID, receiverID, amount int) error {
-	builder := sq.Insert(transactionsTable).
-		PlaceholderFormat(sq.Dollar).
-		Columns(senderIDColumn, receiverIDColumn, amountColumn, createdAtColumn).
-		Values(senderID, receiverID, amount, sq.Expr("NOW()"))
-
-	query, args, err := builder.ToSql()
-	if err != nil {
-		return fmt.Errorf("building insert query error: %w", err)
-	}
-
-	_, err = r.db.pool.Exec(ctx, query, args...)
-	if err != nil {
-		return fmt.Errorf("executing insert query error: %w", err)
-	}
-
-	return nil
-}
-
-func (r *repository) GetUserTransactions(ctx context.Context, userID int) ([]shop.Transaction, error) {
-	builder := sq.Select(senderIDColumn, receiverIDColumn, amountColumn, createdAtColumn).
-		PlaceholderFormat(sq.Dollar).
-		From(transactionsTable).
-		Where(sq.Or{sq.Eq{senderIDColumn: userID}, sq.Eq{receiverIDColumn: userID}}).
-		OrderBy(fmt.Sprintf("%s DESC", createdAtColumn))
-
-	query, args, err := builder.ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("building select query error: %w", err)
+		return nil, repo.ErrorBuildBalanceSelectQuery
 	}
 
 	rows, err := r.db.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("executing select query error: %w", err)
+		return nil, repo.ErrorSelectBalance
 	}
 	defer rows.Close()
 
-	var transactions []shop.Transaction
-	for rows.Next() {
-		var t shop.Transaction
-		err := rows.Scan(&t.SenderID, &t.ReceiverID, &t.Amount, &t.CreatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("scanning transaction error: %w", err)
-		}
-		transactions = append(transactions, t)
-	}
-
-	return transactions, nil
-}
-
-func (r *repository) BuyItem(ctx context.Context, userID int, item string, cost int) error {
-	tx, err := r.db.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("starting transaction error: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	builder := sq.Select(balanceColumn).
-		PlaceholderFormat(sq.Dollar).
-		From(usersTable).
-		Where(sq.Eq{"id": userID})
-
-	query, args, err := builder.ToSql()
-	if err != nil {
-		return fmt.Errorf("building balance query error: %w", err)
+	if !rows.Next() {
+		return nil, repo.ErrorUserNotFound
 	}
 
 	var balance int
-	err = tx.QueryRow(ctx, query, args...).Scan(&balance)
+	err = rows.Scan(&balance)
 	if err != nil {
-		return fmt.Errorf("fetching user balance error: %w", err)
-	}
-	if balance < cost {
-		return errors.New("not enough coins to buy item")
+		return nil, repo.ErrorScanBalance
 	}
 
-	builder = sq.Update(usersTable).
-		PlaceholderFormat(sq.Dollar).
-		Set(balanceColumn, balance-cost).
-		Where(sq.Eq{"id": userID})
+	return &balance, nil
+}
 
-	query, args, err = builder.ToSql()
+func (r *repository) GetTransactionHistory(ctx context.Context, userID string) ([]CoinTransaction, error) {
+	builder := sq.Select(idColumn, senderIDColumn, receiverIDColumn, amountColumn, createdAtColumn).
+		From(transactionsTable).
+		Where(sq.Or{
+			sq.Eq{senderIDColumn: userID},
+			sq.Eq{receiverIDColumn: userID},
+		}).
+		OrderBy(createdAtColumn + " DESC").
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err := builder.ToSql()
 	if err != nil {
-		return fmt.Errorf("building update balance query error: %w", err)
+		return nil, repo.ErrorBuildTransactionQuery
+	}
+
+	rows, err := r.db.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, repo.ErrorSelectTransactions
+	}
+	defer rows.Close()
+
+	var transactions []CoinTransaction
+	for rows.Next() {
+		var t CoinTransaction
+		if err := rows.Scan(&t.ID, &t.FromUserID, &t.ToUserID, &t.Amount, &t.CreatedAt); err != nil {
+			return nil, repo.ErrorScanTransaction
+		}
+		transactions = append(transactions, t)
+	}
+	return transactions, nil
+}
+func (r *repository) BuyMerch(ctx context.Context, item *InventoryItem) error {
+	tx, err := r.db.pool.Begin(ctx)
+	if err != nil {
+		return repo.ErrorTxBegin
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback(ctx)
+			panic(p)
+		} else if err != nil {
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				slog.Error("cannot rollback transaction", slog.Any("error", rollbackErr))
+			}
+		}
+	}()
+
+	var userID uuid.UUID
+	var balance int
+
+	selectBalance := sq.Select(idColumn, balanceColumn).
+		From(usersTable).
+		Where(sq.Eq{usernameColumn: item.Username}).
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err := selectBalance.ToSql()
+	if err != nil {
+		return repo.ErrorBuildSenderSelectQuery
+	}
+
+	err = r.db.pool.QueryRow(ctx, query, args...).Scan(&userID, &balance)
+	if err != nil {
+		return repo.ErrorUserNotFound
+	}
+
+	var price int
+	selectItem := sq.Select(priceColumn).
+		From(shopItemsTable).
+		Where(sq.Eq{typeColumn: item.ItemType}).
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err = selectItem.ToSql()
+	if err != nil {
+		return repo.ErrorBuildSenderSelectQuery
+	}
+
+	err = r.db.pool.QueryRow(ctx, query, args...).Scan(&price)
+	if err != nil {
+		return repo.ErrorItemNotFound
+	}
+
+	totalCost := price * item.Quantity
+
+	if balance < totalCost {
+		return repo.ErrorInsFunds
+	}
+
+	selectUserForUpdate := sq.Select(idColumn).
+		From(usersTable).
+		Where(sq.Eq{usernameColumn: item.Username}).
+		Suffix("FOR UPDATE SKIP LOCKED").
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err = selectUserForUpdate.ToSql()
+	if err != nil {
+		return repo.ErrorBuildSenderSelectQuery
+	}
+
+	err = tx.QueryRow(ctx, query, args...).Scan(&userID)
+	if err != nil {
+		return repo.ErrorUserNotFound
+	}
+
+	updateBalance := sq.Update(usersTable).
+		Set(balanceColumn, sq.Expr(balanceColumn+" - ?", totalCost)).
+		Where(sq.Eq{idColumn: userID}).
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err = updateBalance.ToSql()
+	if err != nil {
+		return repo.ErrorBuildBalanceUpdateQuery
 	}
 
 	_, err = tx.Exec(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("updating balance error: %w", err)
+		return repo.ErrorUpdateUserBalance
 	}
 
-	builder = sq.Insert(transactionsTable).
-		PlaceholderFormat(sq.Dollar).
-		Columns(senderIDColumn, itemColumn, createdAtColumn).
-		Values(userID, item, time.Now())
+	upsertInventory := sq.Insert(inventoryTable).
+		Columns(userIDColumn, itemTypeColumn, quantityColumn).
+		Values(userID, item.ItemType, item.Quantity).
+		Suffix("ON CONFLICT (user_id, item_type) DO UPDATE SET quantity = inventory.quantity + EXCLUDED.quantity").
+		PlaceholderFormat(sq.Dollar)
 
-	query, args, err = builder.ToSql()
+	query, args, err = upsertInventory.ToSql()
 	if err != nil {
-		return fmt.Errorf("building insert transaction query error: %w", err)
+		return repo.ErrorBuildInventoryUpdateQuery
 	}
 
 	_, err = tx.Exec(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("inserting transaction error: %w", err)
+		return repo.ErrorInsertInventoryRecord
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
-		return fmt.Errorf("committing transaction error: %w", err)
+		return repo.ErrorTxCommit
 	}
-
 	return nil
 }
-*/
+
+func (r *repository) GetInventory(ctx context.Context, username string) ([]InventoryItem, error) {
+	builder := sq.Select("i.id", "i.user_id", "i.item_type", "i.quantity").
+		From("inventory i").
+		Join("users u ON u.id = i.user_id").
+		Where(sq.Eq{"u.username": username}).
+		PlaceholderFormat(sq.Dollar)
+
+	query, args, err := builder.ToSql()
+	if err != nil {
+		return nil, repo.ErrorBuildInventorySelectQuery
+	}
+
+	rows, err := r.db.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, repo.ErrorSelectInventory
+	}
+	defer rows.Close()
+
+	var inventory []InventoryItem
+	for rows.Next() {
+		var item InventoryItem
+		if err := rows.Scan(&item.ID, &item.UserID, &item.ItemType, &item.Quantity); err != nil {
+			return nil, repo.ErrorScanQuery
+		}
+		inventory = append(inventory, item)
+	}
+	return inventory, nil
+}

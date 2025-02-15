@@ -2,7 +2,10 @@ package http_server
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
+
+	"github.com/kingxl111/merch-store/internal/shop"
 
 	"github.com/go-faster/errors"
 	env "github.com/kingxl111/merch-store/internal/environment"
@@ -11,6 +14,10 @@ import (
 
 	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 	"github.com/labstack/echo/v4"
+)
+
+const (
+	internalServerError = "internal server error"
 )
 
 var _ merchstoreapi.ServerInterface = (*Handler)(nil)
@@ -51,7 +58,7 @@ func (h *Handler) PostApiAuth(echoCtx echo.Context) error {
 				merchstoreapi.ErrorResponse{Errors: &errMsg},
 			)
 		}
-		errMsg := "internal server error"
+		errMsg := internalServerError
 		return echoCtx.JSON(
 			http.StatusInternalServerError,
 			merchstoreapi.ErrorResponse{Errors: &errMsg},
@@ -61,9 +68,45 @@ func (h *Handler) PostApiAuth(echoCtx echo.Context) error {
 	return echoCtx.JSON(http.StatusOK, merchstoreapi.AuthResponse{Token: &resp.Token})
 }
 
-func (h *Handler) GetApiBuyItem(ctx echo.Context, item string) error {
-	// TODO: call service layer
-	return ctx.JSON(http.StatusOK, "Предмет куплен")
+func (h *Handler) GetApiBuyItem(echoCtx echo.Context, item string) error {
+	ctx := echoCtx.Request().Context()
+	req := shop.InventoryItem{
+		Type:     item,
+		Quantity: 1,
+	}
+
+	err := h.shopService.BuyMerch(ctx, req)
+	if err != nil {
+		var errMsg string
+
+		switch {
+		case errors.Is(err, shop.ErrUserNotFound):
+			errMsg = "user not found"
+			return echoCtx.JSON(http.StatusNotFound, merchstoreapi.ErrorResponse{Errors: &errMsg})
+
+		case errors.Is(err, shop.ErrItemNotFound):
+			errMsg = "item not found"
+			return echoCtx.JSON(http.StatusNotFound, merchstoreapi.ErrorResponse{Errors: &errMsg})
+
+		case errors.Is(err, shop.ErrInsufficientFunds):
+			errMsg = "not enough money"
+			return echoCtx.JSON(http.StatusPaymentRequired, merchstoreapi.ErrorResponse{Errors: &errMsg})
+
+		case errors.Is(err, shop.ErrBuildQuery),
+			errors.Is(err, shop.ErrUpdateBalance),
+			errors.Is(err, shop.ErrUpdateInventory),
+			errors.Is(err, shop.ErrTransactionFailed):
+			errMsg = internalServerError
+			return echoCtx.JSON(http.StatusInternalServerError, merchstoreapi.ErrorResponse{Errors: &errMsg})
+
+		default:
+			slog.Error("Unexpected error in BuyMerch", slog.Any("error", err))
+			errMsg = internalServerError
+			return echoCtx.JSON(http.StatusInternalServerError, merchstoreapi.ErrorResponse{Errors: &errMsg})
+		}
+	}
+
+	return echoCtx.JSON(http.StatusOK, "Предмет куплен")
 }
 
 /*
@@ -108,7 +151,14 @@ func (h *Handler) PostApiSendCoin(echoCtx echo.Context) error {
 				merchstoreapi.ErrorResponse{Errors: &errMsg},
 			)
 		}
-		errMsg := "internal server error"
+		if errors.Is(err, users.ErrorInvalidAmount) {
+			errMsg := "wrong amount format"
+			return echoCtx.JSON(
+				http.StatusBadRequest,
+				merchstoreapi.ErrorResponse{Errors: &errMsg},
+			)
+		}
+		errMsg := internalServerError
 		return echoCtx.JSON(
 			http.StatusInternalServerError,
 			merchstoreapi.ErrorResponse{Errors: &errMsg},

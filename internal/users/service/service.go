@@ -50,7 +50,9 @@ func (u *userService) Authenticate(ctx context.Context, req *users.AuthRequest) 
 }
 
 func (u *userService) TransferCoins(ctx context.Context, req *users.CoinTransfer) error {
-
+	if req.Amount < 0 {
+		return users.ErrorInvalidAmount
+	}
 	err := u.userRepo.TransferCoins(ctx, req.FromUser, req.ToUser, req.Amount)
 	if err != nil {
 		fmt.Println(err)

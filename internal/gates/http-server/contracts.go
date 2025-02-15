@@ -16,6 +16,6 @@ type (
 	}
 
 	ShopService interface {
-		BuyMerch(ctx context.Context, req []shop.InventoryItem) error
+		BuyMerch(ctx context.Context, req shop.InventoryItem) error
 	}
 )

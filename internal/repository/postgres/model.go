@@ -15,6 +15,7 @@ type User struct {
 type InventoryItem struct {
 	ID       int    `db:"id"`
 	UserID   string `db:"user_id"`
+	Username string `db:"username"`
 	ItemType string `db:"item_type"`
 	Quantity int    `db:"quantity"`
 }

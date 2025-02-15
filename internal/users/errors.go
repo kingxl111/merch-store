@@ -8,4 +8,5 @@ var (
 	ErrorCreateUser    = errors.New("cannot create user")
 	ErrorWrongPassword = errors.New("wrong password")
 	ErrorInsufFunds    = errors.New("insufficient funds")
+	ErrorInvalidAmount = errors.New("invalid amount")
 )
