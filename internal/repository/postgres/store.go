@@ -88,12 +88,8 @@ func (r *repository) AuthUser(ctx context.Context, user *User) error {
 	}
 	defer rows.Close()
 
-	if rows.Next() {
-		var username, password string
-		if er := rows.Scan(&username, &password); er != nil {
-			return repo.ErrorScanningRow
-		}
-		return nil
+	if !rows.Next() {
+		return repo.ErrorUserPasswordCombine
 	}
 
 	return nil

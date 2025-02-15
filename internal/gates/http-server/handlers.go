@@ -1,7 +1,7 @@
 package http_server
 
 import (
-	"fmt"
+	"github.com/go-faster/errors"
 	"net/http"
 
 	"github.com/kingxl111/merch-store/internal/users"
@@ -41,8 +41,18 @@ func (h *Handler) PostApiAuth(echoCtx echo.Context) error {
 	}
 	resp, err := h.userService.Authenticate(ctx, &servReq)
 	if err != nil {
-		fmt.Println(err)
-		return err
+		if errors.Is(err, users.ErrorWrongPassword) {
+			errMsg := "wrong password"
+			return echoCtx.JSON(
+				http.StatusBadRequest,
+				merchstoreapi.ErrorResponse{Errors: &errMsg},
+			)
+		}
+		errMsg := "internal server error"
+		return echoCtx.JSON(
+			http.StatusInternalServerError,
+			merchstoreapi.ErrorResponse{Errors: &errMsg},
+		)
 	}
 
 	return echoCtx.JSON(http.StatusOK, merchstoreapi.AuthResponse{Token: &resp.Token})

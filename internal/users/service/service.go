@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
-
 	"github.com/go-faster/errors"
 	"github.com/kingxl111/merch-store/internal/repository"
 	"github.com/kingxl111/merch-store/internal/repository/postgres"
@@ -46,7 +44,6 @@ func (u *userService) Authenticate(ctx context.Context, req *users.AuthRequest) 
 		return nil, users.ErrorGenerateToken
 	}
 	resp.Token = token
-	fmt.Println("TOKEN: ", resp.Token)
 	return &resp, nil
 }
 
