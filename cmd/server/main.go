@@ -5,11 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/labstack/echo/v4"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/kingxl111/merch-store/internal/config"
@@ -20,8 +20,6 @@ import (
 	usrs "github.com/kingxl111/merch-store/internal/users/service"
 	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 )
-
-const baseURL = ""
 
 var configPath string
 
@@ -45,8 +43,7 @@ func main() {
 func runMain(ctx context.Context) error {
 	flag.Parse()
 
-	err := config.Load(configPath)
-	if err != nil {
+	if err := config.Load(configPath); err != nil {
 		return fmt.Errorf("failed to load config: %v", err)
 	}
 
@@ -90,19 +87,17 @@ func runMain(ctx context.Context) error {
 
 	var opts env.ServerOptions
 	opts.WithLogger(logger)
-
 	handler := httpserver.NewHandler(userSrv, shopSrv)
-	e := echo.New()
-	merchstoreapi.RegisterHandlersWithBaseURL(e, handler, baseURL)
-	httpServer := opts.NewServer(e, httpServerConfig.Address())
+	mux := http.NewServeMux()
+	apiHandler := merchstoreapi.HandlerFromMux(handler, mux)
+	httpServer := opts.NewServer(apiHandler, httpServerConfig.Address())
 
 	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(
-		func() error {
-			logger.Info("starting http server on " + httpServerConfig.Address() + "...")
-			return env.ListenAndServeContext(ctx, httpServer)
-		},
-	)
+
+	eg.Go(func() error {
+		logger.Info("starting http server on " + httpServerConfig.Address() + "...")
+		return env.ListenAndServeContext(ctx, httpServer)
+	})
 
 	eg.Go(func() error {
 		<-ctx.Done()

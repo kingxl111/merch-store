@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/kingxl111/merch-store/internal/shop"
 
 	"github.com/go-faster/errors"
 	"github.com/kingxl111/merch-store/internal/repository"
@@ -65,6 +66,57 @@ func (u *userService) TransferCoins(ctx context.Context, req *users.CoinTransfer
 	return nil
 }
 
-func (u *userService) GetUserInfo(ctx context.Context, userID string) (*users.UserInfoResponse, error) {
-	return nil, nil
+func (u *userService) GetUserInfo(ctx context.Context, username string) (*users.UserInfoResponse, error) {
+	balance, err := u.userRepo.GetBalance(ctx, username)
+	if err != nil {
+		return nil, users.ErrorService
+	}
+
+	inventory, err := u.userRepo.GetInventory(ctx, username)
+	if err != nil {
+		return nil, users.ErrorService
+	}
+	fmt.Println(inventory)
+
+	transactions, err := u.userRepo.GetTransactionHistory(ctx, username)
+	if err != nil {
+		return nil, users.ErrorService
+	}
+	fmt.Println(transactions)
+
+	var receivedHistory []users.CoinTransfer
+	var sentHistory []users.CoinTransfer
+
+	for _, tx := range transactions {
+		if tx.ToUserID == username {
+			receivedHistory = append(receivedHistory, users.CoinTransfer{
+				FromUser: tx.FromUserID,
+				ToUser:   tx.ToUserID,
+				Amount:   tx.Amount,
+			})
+		} else if tx.FromUserID == username {
+			sentHistory = append(sentHistory, users.CoinTransfer{
+				FromUser: tx.FromUserID,
+				ToUser:   tx.ToUserID,
+				Amount:   tx.Amount,
+			})
+		}
+	}
+	userInventory := make([]shop.InventoryItem, len(inventory))
+	for _, v := range inventory {
+		item := shop.InventoryItem{
+			Type:     v.ItemType,
+			Quantity: v.Quantity,
+		}
+		userInventory = append(userInventory, item)
+	}
+
+	resp := &users.UserInfoResponse{
+		Coins:           *balance,
+		Inventory:       userInventory,
+		ReceivedHistory: receivedHistory,
+		SentHistory:     sentHistory,
+	}
+
+	return resp, nil
 }

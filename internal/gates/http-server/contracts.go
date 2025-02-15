@@ -12,7 +12,7 @@ type (
 	UserService interface {
 		Authenticate(ctx context.Context, req *users.AuthRequest) (*users.AuthResponse, error)
 		TransferCoins(ctx context.Context, req *users.CoinTransfer) error
-		GetUserInfo(ctx context.Context, userID string) (*users.UserInfoResponse, error)
+		GetUserInfo(ctx context.Context, username string) (*users.UserInfoResponse, error)
 	}
 
 	ShopService interface {

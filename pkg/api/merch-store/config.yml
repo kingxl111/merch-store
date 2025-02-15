@@ -1,7 +1,13 @@
+#package: merch_store_api
+#output: generated.go
+#generate:
+#  - types
+#  - client
+#  - server
+#  - embedded-spec
+
 package: merch_store_api
-output: generated.go
 generate:
-  - types
-  - client
-  - server
-  - embedded-spec
+  std-http-server: true
+  models: true
+output: generated.go

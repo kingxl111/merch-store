@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -140,4 +141,19 @@ func (o *ServerOptions) authMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func NewRouter(handler merchstoreapi.ServerInterface) http.Handler {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/api/auth", handler.PostApiAuth)
+	mux.HandleFunc("/api/buy/", func(w http.ResponseWriter, r *http.Request) {
+		// Извлекаем параметр item из пути
+		item := r.URL.Path[len("/api/buy/"):]
+		handler.GetApiBuyItem(w, r, item)
+	})
+	mux.HandleFunc("/api/info", handler.GetApiInfo)
+	mux.HandleFunc("/api/sendCoin", handler.PostApiSendCoin)
+
+	return mux
 }

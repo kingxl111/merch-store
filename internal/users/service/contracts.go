@@ -11,6 +11,7 @@ type AuthRepository interface {
 }
 
 type UserRepository interface {
+	GetInventory(ctx context.Context, username string) ([]postgres.InventoryItem, error)
 	TransferCoins(ctx context.Context, fromUser, toUser string, amount int) error
 	GetBalance(ctx context.Context, username string) (*int, error)
 	GetTransactionHistory(ctx context.Context, username string) ([]postgres.CoinTransaction, error)

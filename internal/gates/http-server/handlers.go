@@ -1,23 +1,14 @@
 package http_server
 
 import (
-	"fmt"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
-	"github.com/kingxl111/merch-store/internal/shop"
-
 	"github.com/go-faster/errors"
-	env "github.com/kingxl111/merch-store/internal/environment"
-
+	"github.com/kingxl111/merch-store/internal/shop"
 	"github.com/kingxl111/merch-store/internal/users"
-
 	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
-	"github.com/labstack/echo/v4"
-)
-
-const (
-	internalServerError = "internal server error"
 )
 
 var _ merchstoreapi.ServerInterface = (*Handler)(nil)
@@ -34,136 +25,112 @@ func NewHandler(userService UserService, shopService ShopService) *Handler {
 	}
 }
 
-func (h *Handler) PostApiAuth(echoCtx echo.Context) error {
+func (h *Handler) PostApiAuth(w http.ResponseWriter, r *http.Request) {
 	var req merchstoreapi.AuthRequest
-	if err := echoCtx.Bind(&req); err != nil {
-		errMsg := err.Error()
-		return echoCtx.JSON(
-			http.StatusBadRequest,
-			merchstoreapi.ErrorResponse{Errors: &errMsg},
-		)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, err.Error())
+		return
 	}
-	ctx := echoCtx.Request().Context()
-	// dto
-	servReq := users.AuthRequest{
+	ctx := r.Context()
+	resp, err := h.userService.Authenticate(ctx, &users.AuthRequest{
 		Username: req.Username,
 		Password: req.Password,
-	}
-	resp, err := h.userService.Authenticate(ctx, &servReq)
+	})
 	if err != nil {
 		if errors.Is(err, users.ErrorWrongPassword) {
-			errMsg := "wrong password"
-			return echoCtx.JSON(
-				http.StatusBadRequest,
-				merchstoreapi.ErrorResponse{Errors: &errMsg},
-			)
+			h.respondWithError(w, http.StatusBadRequest, "wrong password")
+			return
 		}
-		errMsg := internalServerError
-		return echoCtx.JSON(
-			http.StatusInternalServerError,
-			merchstoreapi.ErrorResponse{Errors: &errMsg},
-		)
+		h.respondWithError(w, http.StatusInternalServerError, "internal server error")
+		return
 	}
-
-	return echoCtx.JSON(http.StatusOK, merchstoreapi.AuthResponse{Token: &resp.Token})
+	h.respondWithJSON(w, http.StatusOK, merchstoreapi.AuthResponse{Token: &resp.Token})
 }
 
-func (h *Handler) GetApiBuyItem(echoCtx echo.Context, item string) error {
-	ctx := echoCtx.Request().Context()
-	req := shop.InventoryItem{
+func (h *Handler) GetApiBuyItem(w http.ResponseWriter, r *http.Request, item string) {
+	ctx := r.Context()
+	err := h.shopService.BuyMerch(ctx, shop.InventoryItem{
 		Type:     item,
 		Quantity: 1,
-	}
-
-	err := h.shopService.BuyMerch(ctx, req)
+	})
 	if err != nil {
-		var errMsg string
-
+		var status int
+		var message string
 		switch {
 		case errors.Is(err, shop.ErrUserNotFound):
-			errMsg = "user not found"
-			return echoCtx.JSON(http.StatusNotFound, merchstoreapi.ErrorResponse{Errors: &errMsg})
-
+			status, message = http.StatusNotFound, "user not found"
 		case errors.Is(err, shop.ErrItemNotFound):
-			errMsg = "item not found"
-			return echoCtx.JSON(http.StatusNotFound, merchstoreapi.ErrorResponse{Errors: &errMsg})
-
+			status, message = http.StatusNotFound, "item not found"
 		case errors.Is(err, shop.ErrInsufficientFunds):
-			errMsg = "not enough money"
-			return echoCtx.JSON(http.StatusPaymentRequired, merchstoreapi.ErrorResponse{Errors: &errMsg})
-
-		case errors.Is(err, shop.ErrBuildQuery),
-			errors.Is(err, shop.ErrUpdateBalance),
-			errors.Is(err, shop.ErrUpdateInventory),
-			errors.Is(err, shop.ErrTransactionFailed):
-			errMsg = internalServerError
-			return echoCtx.JSON(http.StatusInternalServerError, merchstoreapi.ErrorResponse{Errors: &errMsg})
-
+			status, message = http.StatusPaymentRequired, "not enough money"
 		default:
 			slog.Error("Unexpected error in BuyMerch", slog.Any("error", err))
-			errMsg = internalServerError
-			return echoCtx.JSON(http.StatusInternalServerError, merchstoreapi.ErrorResponse{Errors: &errMsg})
+			status, message = http.StatusInternalServerError, "internal server error"
 		}
+		h.respondWithError(w, status, message)
+		return
 	}
-
-	return echoCtx.JSON(http.StatusOK, "Предмет куплен")
+	h.respondWithJSON(w, http.StatusOK, "Item purchased")
 }
 
-/*
-Список купленных мерчовых товаров
-Сгруппированную информацию о перемещении монеток в его кошельке, включая:
-Кто ему передавал монетки и в каком количестве
-Кому сотрудник передавал монетки и в каком количестве
-*/
-func (h *Handler) GetApiInfo(ctx echo.Context) error {
-	// TODO: call service layer
-	info := merchstoreapi.InfoResponse{
-		Coins: new(int),
+func (h *Handler) GetApiInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	username, ok := ctx.Value("username").(string)
+	if !ok {
+		h.respondWithError(w, http.StatusUnauthorized, "unauthorized")
+		return
 	}
-	*info.Coins = 100
-	return ctx.JSON(http.StatusOK, info)
+
+	userInfo, err := h.userService.GetUserInfo(ctx, username)
+	if err != nil {
+		h.respondWithError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	h.respondWithJSON(w, http.StatusOK, userInfo)
 }
 
-func (h *Handler) PostApiSendCoin(echoCtx echo.Context) error {
+func (h *Handler) PostApiSendCoin(w http.ResponseWriter, r *http.Request) {
 	var req merchstoreapi.SendCoinRequest
-	if err := echoCtx.Bind(&req); err != nil {
-		errMsg := err.Error()
-		return echoCtx.JSON(
-			http.StatusBadRequest,
-			merchstoreapi.ErrorResponse{Errors: &errMsg},
-		)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ctx := r.Context()
+	fromUser, ok := ctx.Value("username").(string)
+	if !ok {
+		h.respondWithError(w, http.StatusUnauthorized, "unauthorized")
+		return
 	}
 
-	ctx := echoCtx.Request().Context()
-	fromUser := ctx.Value(env.UsernameContextKey).(string)
-	transfer := users.CoinTransfer{
+	err := h.userService.TransferCoins(ctx, &users.CoinTransfer{
 		FromUser: fromUser,
 		ToUser:   req.ToUser,
 		Amount:   req.Amount,
-	}
-	err := h.userService.TransferCoins(ctx, &transfer)
-	fmt.Println(err)
+	})
 	if err != nil {
+		var status int
+		var message string
 		if errors.Is(err, users.ErrorInsufFunds) {
-			errMsg := "insufficient funds in the sender's balance"
-			return echoCtx.JSON(
-				http.StatusBadRequest,
-				merchstoreapi.ErrorResponse{Errors: &errMsg},
-			)
+			status, message = http.StatusBadRequest, "insufficient funds"
+		} else if errors.Is(err, users.ErrorInvalidAmount) {
+			status, message = http.StatusBadRequest, "wrong amount format"
+		} else {
+			status, message = http.StatusInternalServerError, "internal server error"
 		}
-		if errors.Is(err, users.ErrorInvalidAmount) {
-			errMsg := "wrong amount format"
-			return echoCtx.JSON(
-				http.StatusBadRequest,
-				merchstoreapi.ErrorResponse{Errors: &errMsg},
-			)
-		}
-		errMsg := internalServerError
-		return echoCtx.JSON(
-			http.StatusInternalServerError,
-			merchstoreapi.ErrorResponse{Errors: &errMsg},
-		)
+		h.respondWithError(w, status, message)
+		return
 	}
 
-	return echoCtx.JSON(http.StatusOK, "Монеты отправлены")
+	h.respondWithJSON(w, http.StatusOK, "Coins sent")
+}
+
+func (h *Handler) respondWithError(w http.ResponseWriter, statusCode int, message string) {
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(merchstoreapi.ErrorResponse{Errors: &message})
+}
+
+func (h *Handler) respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{}) {
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(payload)
 }
