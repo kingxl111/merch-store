@@ -3,6 +3,9 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
+
+	repo "github.com/kingxl111/merch-store/internal/repository"
 
 	sq "github.com/Masterminds/squirrel"
 )
@@ -13,7 +16,7 @@ const (
 
 	usernameColumn = "username"
 	passwordColumn = "password"
-	balanceColumn  = "balance"
+	balanceColumn  = "coins"
 
 	senderIDColumn   = "sender_id"
 	receiverIDColumn = "receiver_id"
@@ -32,24 +35,65 @@ func NewRepository(db *DB) *repository {
 
 func (r *repository) AuthUser(ctx context.Context, user *User) error {
 
-	selectBuilder := sq.Select(usernameColumn, passwordColumn).
+	selectBuilder := sq.Select(usernameColumn).
 		PlaceholderFormat(sq.Dollar).
 		From(usersTable).
 		Where(sq.Eq{usernameColumn: user.Username})
 
-	builder := sq.Insert(usersTable).
-		PlaceholderFormat(sq.Dollar).
-		Columns(usernameColumn, passwordColumn, balanceColumn).
-		Values(user.Username, user.Password, user.Coins)
-
-	query, args, err := builder.ToSql()
+	query, args, err := selectBuilder.ToSql()
 	if err != nil {
-		return fmt.Errorf("building insert query error: %w", err)
+		return repo.ErrorBuildingSelectQuery
 	}
 
-	_, err = r.db.pool.Exec(ctx, query, args...)
+	rows, err := r.db.pool.Query(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("executing insert query error: %w", err)
+		return repo.ErrorSelectUser
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		builder := sq.Insert(usersTable).
+			PlaceholderFormat(sq.Dollar).
+			Columns(usernameColumn, passwordColumn, balanceColumn, createdAtColumn).
+			Values(user.Username, user.Password, 1000, time.Now())
+
+		query, args, err := builder.ToSql()
+		if err != nil {
+			return repo.ErrorBuildingInsertQuery
+		}
+
+		_, err = r.db.pool.Exec(ctx, query, args...)
+		if err != nil {
+			fmt.Println(query)
+			fmt.Println(args...)
+			return repo.ErrorInsertUser
+		}
+		return nil
+	}
+
+	selectBuilder = sq.Select(usernameColumn, passwordColumn).
+		PlaceholderFormat(sq.Dollar).
+		From(usersTable).
+		Where(sq.Eq{usernameColumn: user.Username}).
+		Where(sq.Eq{passwordColumn: user.Password})
+
+	query, args, err = selectBuilder.ToSql()
+	if err != nil {
+		return repo.ErrorBuildingSelectQuery
+	}
+
+	rows, err = r.db.pool.Query(ctx, query, args...)
+	if err != nil {
+		return repo.ErrorSelectUser
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		var username, password string
+		if er := rows.Scan(&username, &password); er != nil {
+			return repo.ErrorScanningRow
+		}
+		return nil
 	}
 
 	return nil

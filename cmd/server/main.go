@@ -81,7 +81,7 @@ func runMain(ctx context.Context) error {
 
 	repo := postgres.NewRepository(db)
 	shopSrv := shop.NewShopService(repo)
-	userSrv := usrs.NewUserService(repo)
+	userSrv := usrs.NewUserService(repo, repo)
 
 	httpServerConfig, err := config.NewHTTPConfig()
 	if err != nil {

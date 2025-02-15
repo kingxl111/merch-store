@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-faster/errors"
 	"github.com/kingxl111/merch-store/internal/repository"
@@ -14,15 +15,15 @@ type userService struct {
 	authRepo AuthRepository
 }
 
-func NewUserService(usrRepo UserRepository) *userService {
+func NewUserService(usrRepo UserRepository, authRepo AuthRepository) *userService {
 	return &userService{
 		userRepo: usrRepo,
+		authRepo: authRepo,
 	}
 }
 
 func (u *userService) Authenticate(ctx context.Context, req *users.AuthRequest) (*users.AuthResponse, error) {
 	var resp users.AuthResponse
-
 	usrRepo := postgres.User{
 		Username: req.Username,
 		Password: req.Password,
@@ -34,6 +35,9 @@ func (u *userService) Authenticate(ctx context.Context, req *users.AuthRequest) 
 		if errors.Is(err, repository.ErrorInsertUser) {
 			return nil, users.ErrorCreateUser
 		}
+		if errors.Is(err, repository.ErrorUserPasswordCombine) {
+			return nil, users.ErrorWrongPassword
+		}
 		return nil, users.ErrorService
 	}
 
@@ -42,6 +46,7 @@ func (u *userService) Authenticate(ctx context.Context, req *users.AuthRequest) 
 		return nil, users.ErrorGenerateToken
 	}
 	resp.Token = token
+	fmt.Println("TOKEN: ", resp.Token)
 	return &resp, nil
 }
 

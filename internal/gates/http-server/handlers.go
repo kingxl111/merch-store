@@ -41,7 +41,8 @@ func (h *Handler) PostApiAuth(echoCtx echo.Context) error {
 	}
 	resp, err := h.userService.Authenticate(ctx, &servReq)
 	if err != nil {
-		return fmt.Errorf("TODO: add wrapped error")
+		fmt.Println(err)
+		return err
 	}
 
 	return echoCtx.JSON(http.StatusOK, merchstoreapi.AuthResponse{Token: &resp.Token})
