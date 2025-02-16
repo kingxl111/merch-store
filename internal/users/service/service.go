@@ -102,7 +102,7 @@ func (u *userService) GetUserInfo(ctx context.Context, username string) (*users.
 			})
 		}
 	}
-	userInventory := make([]shop.InventoryItem, len(inventory))
+	userInventory := make([]shop.InventoryItem, 0)
 	for _, v := range inventory {
 		item := shop.InventoryItem{
 			Type:     v.ItemType,

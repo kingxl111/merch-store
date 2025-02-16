@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -96,13 +97,33 @@ func runMain(ctx context.Context) error {
 
 	eg.Go(func() error {
 		logger.Info("starting http server on " + httpServerConfig.Address() + "...")
-		return env.ListenAndServeContext(ctx, httpServer)
+		if err := env.ListenAndServeContext(ctx, httpServer); err != nil {
+			return fmt.Errorf("http server: %w", err)
+		}
+		return nil
 	})
 
 	eg.Go(func() error {
 		<-ctx.Done()
-		return httpServer.Shutdown(context.Background())
+		logger.Info("shutting down server...")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("error during server shutdown", slog.Any("err", err))
+			return err
+		}
+
+		logger.Info("server stopped gracefully")
+		return nil
 	})
 
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		logger.Error("server terminated with error", slog.Any("err", err))
+		return fmt.Errorf("server terminated with error: %w", err)
+	}
+
+	logger.Info("server exited cleanly")
+	return nil
 }

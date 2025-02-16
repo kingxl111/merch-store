@@ -2,11 +2,11 @@ package http
 
 import (
 	"context"
-	merchstoreapi "github.com/kingxl111/merch-store/pkg/api/merch-store"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/go-faster/errors"
 	"github.com/kingxl111/merch-store/internal/users/service"
@@ -76,31 +76,64 @@ func (o *ServerOptions) NewServer(handler http.Handler, addr string) *http.Serve
 }
 
 func ListenAndServeContext(ctx context.Context, srv *http.Server) error {
+	serverErr := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && errors.Is(err, http.ErrServerClosed) {
-			slog.Error("HTTP server error", "error", err)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
 		}
+		close(serverErr)
 	}()
 
 	go func() {
 		<-ctx.Done()
-		if err := srv.Shutdown(context.Background()); err != nil {
+		if err := srv.Shutdown(ctx); err != nil {
 			slog.Error("HTTP server shutdown error", "error", err)
 		}
 	}()
 
-	return nil
+	select {
+	case err := <-serverErr:
+		return err
+	case <-ctx.Done():
+		return nil
+	}
 }
 
 func (o *ServerOptions) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		o.logger.Info("HTTP request",
+		start := time.Now()
+		o.logger.Info("request started",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"remote_addr", r.RemoteAddr,
 		)
-		next.ServeHTTP(w, r)
+
+		lw := &loggingResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(lw, r)
+
+		o.logger.Info("request completed",
+			"status", lw.status,
+			"duration", time.Since(start),
+			"size", lw.size,
+		)
 	})
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+	size   int
+}
+
+func (l *loggingResponseWriter) WriteHeader(status int) {
+	l.status = status
+	l.ResponseWriter.WriteHeader(status)
+}
+
+func (l *loggingResponseWriter) Write(b []byte) (int, error) {
+	size, err := l.ResponseWriter.Write(b)
+	l.size += size
+	return size, err
 }
 
 func (o *ServerOptions) recoveryMiddleware(next http.Handler) http.Handler {
@@ -141,19 +174,4 @@ func (o *ServerOptions) authMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func NewRouter(handler merchstoreapi.ServerInterface) http.Handler {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/api/auth", handler.PostApiAuth)
-	mux.HandleFunc("/api/buy/", func(w http.ResponseWriter, r *http.Request) {
-		// Извлекаем параметр item из пути
-		item := r.URL.Path[len("/api/buy/"):]
-		handler.GetApiBuyItem(w, r, item)
-	})
-	mux.HandleFunc("/api/info", handler.GetApiInfo)
-	mux.HandleFunc("/api/sendCoin", handler.PostApiSendCoin)
-
-	return mux
 }

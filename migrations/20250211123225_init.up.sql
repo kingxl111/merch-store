@@ -2,7 +2,7 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(255) UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    coins INT NOT NULL DEFAULT 1000 CHECK (coins > 0),
+    coins INT NOT NULL DEFAULT 1000 CHECK (coins >= 0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -43,3 +43,7 @@ INSERT INTO shop_items (type, price) VALUES
 -- CREATE INDEX idx_inventory_user ON inventory(user_id);
 -- CREATE INDEX idx_transactions_from ON coin_transactions(from_user_id);
 -- CREATE INDEX idx_transactions_to ON coin_transactions(to_user_id);
+
+-- SELECT pid, age(clock_timestamp(), query_start), state, wait_event, query
+-- FROM pg_stat_activity
+-- WHERE state != 'idle' AND wait_event IS NOT NULL;

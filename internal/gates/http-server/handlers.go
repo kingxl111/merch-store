@@ -2,6 +2,7 @@ package http_server
 
 import (
 	"encoding/json"
+	env "github.com/kingxl111/merch-store/internal/environment"
 	"log/slog"
 	"net/http"
 
@@ -75,7 +76,7 @@ func (h *Handler) GetApiBuyItem(w http.ResponseWriter, r *http.Request, item str
 
 func (h *Handler) GetApiInfo(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	username, ok := ctx.Value("username").(string)
+	username, ok := ctx.Value(env.UsernameContextKey).(string)
 	if !ok {
 		h.respondWithError(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -97,7 +98,7 @@ func (h *Handler) PostApiSendCoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	fromUser, ok := ctx.Value("username").(string)
+	fromUser, ok := ctx.Value(env.UsernameContextKey).(string)
 	if !ok {
 		h.respondWithError(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -126,11 +127,17 @@ func (h *Handler) PostApiSendCoin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) respondWithError(w http.ResponseWriter, statusCode int, message string) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(merchstoreapi.ErrorResponse{Errors: &message})
+	if err := json.NewEncoder(w).Encode(merchstoreapi.ErrorResponse{Errors: &message}); err != nil {
+		slog.Error("Failed to encode error response: %v", err)
+	}
 }
 
 func (h *Handler) respondWithJSON(w http.ResponseWriter, statusCode int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(payload)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		slog.Error("Failed to marshal JSON response: %v", err)
+	}
 }

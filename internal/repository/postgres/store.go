@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -112,16 +111,7 @@ func (r *repository) TransferCoins(ctx context.Context, fromUser, toUser string,
 	if err != nil {
 		return repo.ErrorTxBegin
 	}
-	defer func() {
-		if p := recover(); p != nil {
-			_ = tx.Rollback(ctx)
-			panic(p)
-		} else if err != nil {
-			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				slog.Error("cannot rollback transaction", slog.Any("error", rollbackErr))
-			}
-		}
-	}()
+	defer tx.Rollback(context.Background())
 
 	var fromUserID, toUserID uuid.UUID
 	var fromBalance int
@@ -275,21 +265,13 @@ func (r *repository) GetTransactionHistory(ctx context.Context, userID string) (
 	}
 	return transactions, nil
 }
+
 func (r *repository) BuyMerch(ctx context.Context, item *InventoryItem) error {
 	tx, err := r.db.pool.Begin(ctx)
 	if err != nil {
 		return repo.ErrorTxBegin
 	}
-	defer func() {
-		if p := recover(); p != nil {
-			_ = tx.Rollback(ctx)
-			panic(p)
-		} else if err != nil {
-			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				slog.Error("cannot rollback transaction", slog.Any("error", rollbackErr))
-			}
-		}
-	}()
+	defer tx.Rollback(context.Background())
 
 	var userID uuid.UUID
 	var balance int
@@ -378,8 +360,7 @@ func (r *repository) BuyMerch(ctx context.Context, item *InventoryItem) error {
 		return repo.ErrorInsertInventoryRecord
 	}
 
-	err = tx.Commit(ctx)
-	if err != nil {
+	if err = tx.Commit(ctx); err != nil {
 		return repo.ErrorTxCommit
 	}
 	return nil
